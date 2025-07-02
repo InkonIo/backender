@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional; // Добавлен импорт для @Transactional
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,8 +37,6 @@ public class PolygonAreaController {
 
     @Autowired
     private UserRepository userRepo; // Для получения пользователя, если нужно
-
-    // private final ObjectMapper objectMapper = new ObjectMapper(); // Больше не нужен для парсинга в контроллере
 
     // Метод для создания нового полигона
     @PostMapping
@@ -136,6 +135,7 @@ public class PolygonAreaController {
     
     // Метод для удаления полигона по ID
     @DeleteMapping("/{polygonId}")
+    @Transactional // Добавлено @Transactional
     public ResponseEntity<?> deletePolygonArea(@PathVariable UUID polygonId, @AuthenticationPrincipal User user) {
         log.info("PolygonAreaController: Received request to delete polygon with ID: {}", polygonId);
 
@@ -147,14 +147,20 @@ public class PolygonAreaController {
             if (!polygon.getUser().getId().equals(user.getId())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You are not authorized to delete this polygon.");
             }
-            polygonRepo.delete(polygon);
-            log.info("Polygon deleted successfully with ID: {}", polygonId);
-            return ResponseEntity.ok("Polygon deleted successfully.");
+            try {
+                polygonRepo.delete(polygon);
+                log.info("Polygon deleted successfully with ID: {}", polygonId);
+                return ResponseEntity.noContent().build(); // Изменено на 204 No Content
+            } catch (Exception e) {
+                log.error("Error deleting polygon {}: {}", polygonId, e.getMessage(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete polygon due to internal server error.");
+            }
         }).orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body("Polygon not found."));
     }
 
     // Метод для очистки всех полигонов пользователя
     @DeleteMapping("/clear-all")
+    @Transactional // Добавлено @Transactional
     public ResponseEntity<?> deleteAllPolygonsForUser(@AuthenticationPrincipal User user) {
         log.info("PolygonAreaController: Received request to clear all polygons for user.");
 
@@ -167,11 +173,11 @@ public class PolygonAreaController {
             List<PolygonArea> userPolygons = polygonRepo.findByUser_Id(user.getId());
             if (userPolygons.isEmpty()) {
                 log.info("No polygons found to delete for user {}.", user.getEmail());
-                return ResponseEntity.ok("No polygons found to delete.");
+                return ResponseEntity.noContent().build(); // 204 No Content, даже если нечего удалять
             }
             polygonRepo.deleteAll(userPolygons);
             log.info("All polygons cleared successfully for user {}.", user.getEmail());
-            return ResponseEntity.ok("All polygons deleted successfully.");
+            return ResponseEntity.noContent().build(); // 204 No Content
         } catch (Exception e) {
             log.error("Error clearing all polygons for user {}: {}", user.getEmail(), e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to clear all polygons due to internal server error.");
