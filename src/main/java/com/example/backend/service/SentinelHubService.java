@@ -1,11 +1,6 @@
 // src/main/java/com/example/backend/service/SentinelHubService.java
 package com.example.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode; // Добавлен импорт ArrayNode
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -17,8 +12,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
@@ -131,72 +129,98 @@ public class SentinelHubService {
     private String getEvalscriptForAnalysisType(String analysisType) {
         switch (analysisType.toUpperCase()) {
             case "NDVI":
-            case "3_NDVI": // Добавляем ID из вашего списка
-            case "3_NDVI-L1C": // Добавляем ID для L1C, если данные L1C также используются
-                // Evalscript для NDVI с цветовой палитрой
+            case "3_NDVI":
+            case "3_NDVI-L1C":
+                // Evalscript для NDVI с цветовой палитрой и явной прозрачностью
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B04\", \"B08\", \"dataMask\"] }],\n" +
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" + // 4 bands for RGBA output
+                       "    input: [\"B04\", \"B08\", \"dataMask\"],\n" + // Используем dataMask\n" +
+                       "    output: [\n" +
+                       "      { id: \"default\", bands: 4, sampleType: \"UINT8\" } // RGBA, 8-bit unsigned integer\n" +
+                       "    ]\n" +
+                       "  };\n" +
+                       "}\n" +
+                       "\n" +
+                       "// Плавный градиент NDVI с явным альфа-каналом\n" +
+                       "const ramp = [\n" +
+                       "  [-1.0, [0.0, 0.0, 0.0, 0]], // Полностью прозрачный для значений < -0.5\n" +
+                       "  [-0.5, [0.0, 0.0, 0.0, 0]], // Полностью прозрачный для значений < -0.5\n" +
+                       "  [ 0.0, [0.9, 0.9, 0.9, 0.5]], // Полупрозрачный серый для голой почвы/воды\n" +
+                       "  [ 0.1, [0.8, 0.78,0.51, 1]], // Светло-желтый для редкой растительности\n" +
+                       "  [ 0.2, [0.57,0.75,0.32, 1]],\n" +
+                       "  [ 0.3, [0.44,0.64,0.25, 1]],\n" +
+                       "  [ 0.4, [0.31,0.54,0.18, 1]],\n" +
+                       "  [ 0.5, [0.19,0.43,0.11, 1]],\n" +
+                       "  [ 0.6, [0.06,0.33,0.04, 1]],\n" +
+                       "  [ 1.0, [0.0, 0.27, 0.0, 1]]\n" +
+                       "];\n" +
+                       "const visualizer = new ColorRampVisualizer(ramp);\n" +
+                       "\n" +
+                       "function evaluatePixel(samples) {\n" +
+                       "  let ndvi = index(samples.B08, samples.B04);\n" +
+                       "  let rgb_with_alpha = visualizer.process(ndvi); // Получаем RGBA от visualizer\n" +
+                       "  \n" +
+                       "  // Финальный альфа-канал: произведение альфа из visualizer и dataMask, масштабированное до 0-255\n" +
+                       "  let finalAlpha = rgb_with_alpha[3] * samples.dataMask * 255;\n" +
+                       "\n" +
+                       "  return {\n" +
+                       "    default: [rgb_with_alpha[0] * 255, rgb_with_alpha[1] * 255, rgb_with_alpha[2] * 255, finalAlpha] // Масштабируем RGB на 255\n" +
+                       "  };\n" +
+                       "}";
+            case "TRUE_COLOR":
+            case "1_TRUE_COLOR":
+            case "1_TRUE-COLOR-L1C":
+                return "//VERSION=3\n" +
+                       "function setup() {\n" +
+                       "  return {\n" +
+                       "    input: [{ bands: [\"B02\", \"B03\", \"B04\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
-                       "  let val = (samples.B08 - samples.B04) / (samples.B08 + samples.B04);\n" +
-                       "  let color = colorBlend(val, [-1, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1], [\n" +
-                       "    [0, 0, 0, 0], // Прозрачный для отсутствующих данных / очень низкого NDVI\n" +
-                       "    [0.7, 0.7, 0.7, 1], // Серый для голой почвы / городской застройки\n" +
-                       "    [0.9, 0.9, 0.5, 1], // Светло-желтый для редкой растительности\n" +
-                       "    [0.6, 0.8, 0.3, 1], // Светло-зеленый\n" +
-                       "    [0.3, 0.7, 0.1, 1], // Средне-зеленый\n" +
-                       "    [0.1, 0.5, 0.0, 1], // Темно-зеленый\n" +
-                       "    [0.0, 0.3, 0.0, 1], // Очень темно-зеленый\n" +
-                       "    [0.0, 0.1, 0.0, 1]  // Самый темный зеленый\n" +
-                       "  ]);\n" +
-                       "  return [...color, samples.dataMask]; // Возвращаем RGBA и dataMask для прозрачности\n" +
+                       "  // Масштабирование для лучшей визуализации (умножаем на 255)\n" +
+                       "  // Альфа-канал явно из dataMask, масштабированный до 0-255\n" +
+                       "  return [samples.B04 * 255, samples.B03 * 255, samples.B02 * 255, samples.dataMask * 255];\n" +
                        "}";
             case "FALSE_COLOR":
-            case "2_FALSE_COLOR": // Добавляем ID из вашего списка
-            case "2_FALSE-COLOR-L1C": // Добавляем ID для L1C
-                // Evalscript для ложного цвета (NIR, Red, Green)
-                // Полезно для выделения растительности (красный цвет)
+            case "2_FALSE_COLOR":
+            case "2_FALSE-COLOR-L1C":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B08\", \"B04\", \"B03\", \"dataMask\"] }],\n" + // NIR, Red, Green
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"B08\", \"B04\", \"B03\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
-                       "  // Масштабирование для лучшей визуализации\n" +
-                       "  return [samples.B08 * 2.5, samples.B04 * 2.5, samples.B03 * 2.5, samples.dataMask]; // B8 (NIR) -> Red, B4 (Red) -> Green, B3 (Green) -> Blue\n" +
+                       "  // Масштабирование для лучшей визуализации (умножаем на 255)\n" +
+                       "  // Альфа-канал явно из dataMask, масштабированный до 0-255\n" +
+                       "  return [samples.B08 * 255, samples.B04 * 255, samples.B03 * 255, samples.dataMask * 255];\n" +
                        "}";
             case "FALSE_COLOR_URBAN":
-            case "4-FALSE-COLOR-URBAN": // Добавляем ID из вашего списка
-            case "4-FALSE-COLOR-URBAN-L1C": // Добавляем ID для L1C
-                // Evalscript для ложного цвета (городской) (SWIR1, NIR, Red)
-                // Полезно для выделения городской застройки (голубоватый/фиолетовый)
+            case "4-FALSE-COLOR-URBAN":
+            case "4-FALSE-COLOR-URBAN-L1C":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B11\", \"B08\", \"B04\", \"dataMask\"] }],\n" + // SWIR1, NIR, Red
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"B11\", \"B08\", \"B04\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
-                       "  // Масштабирование для лучшей визуализации\n" +
-                       "  return [samples.B11 * 2.5, samples.B08 * 2.5, samples.B04 * 2.5, samples.dataMask]; // B11 (SWIR1) -> Red, B8 (NIR) -> Green, B4 (Red) -> Blue\n" +
+                       "  // Масштабирование для лучшей визуализации (умножаем на 255)\n" +
+                       "  // Альфа-канал явно из dataMask, масштабированный до 0-255\n" +
+                       "  return [samples.B11 * 255, samples.B08 * 255, samples.B04 * 255, samples.dataMask * 255];\n" +
                        "}";
             case "MOISTURE_INDEX":
-            case "5-MOISTURE-INDEX1": // Добавляем ID из вашего списка
-            case "5-MOISTURE-INDEX1-L1C": // Добавляем ID для L1C
-                // Evalscript для индекса влажности (NDMI / Moisture Index)
-                // (NIR - SWIR1) / (NIR + SWIR1)
+            case "5-MOISTURE-INDEX1":
+            case "5-MOISTURE-INDEX1-L1C":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B08\", \"B11\", \"dataMask\"] }],\n" + // NIR, SWIR1
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"B08\", \"B11\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
@@ -212,18 +236,17 @@ public class SentinelHubService {
                        "    [0.1, 0.0, 0.0, 1], // Очень темно-красный\n" +
                        "    [0.0, 0.0, 0.0, 1]  // Черный (очень влажно)\n" +
                        "  ]);\n" +
-                       "  return [...color, samples.dataMask];\n" +
+                       "  // Умножаем альфа-канал от colorBlend на samples.dataMask для финальной прозрачности\n" +
+                       "  return [color[0] * 255, color[1] * 255, color[2] * 255, color[3] * samples.dataMask * 255]; // Масштабируем RGB на 255\n" +
                        "}";
             case "NDSI":
-            case "8-NDSI": // Добавляем ID из вашего списка
-            case "8-NDSI-L1C": // Добавляем ID для L1C
-                // Evalscript для NDSI (Normalized Difference Snow Index)
-                // (Green - SWIR1) / (Green + SWIR1)
+            case "8-NDSI":
+            case "8-NDSI-L1C":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B03\", \"B11\", \"dataMask\"] }],\n" + // Green, SWIR1
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"B03\", \"B11\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
@@ -237,18 +260,17 @@ public class SentinelHubService {
                        "    [0.9, 0.9, 1.0, 1], // Белый (снег)\n" +
                        "    [1.0, 1.0, 1.0, 1]  // Ярко-белый (чистый снег)\n" +
                        "  ]);\n" +
-                       "  return [...color, samples.dataMask];\n" +
+                       "  // Умножаем альфа-канал от colorBlend на samples.dataMask для финальной прозрачности\n" +
+                       "  return [color[0] * 255, color[1] * 255, color[2] * 255, color[3] * samples.dataMask * 255]; // Масштабируем RGB на 255\n" +
                        "}";
             case "NDWI":
-            case "7-NDWI": // Добавляем ID из вашего списка
-            case "7-NDWI-L1C": // Добавляем ID для L1C
-                // Evalscript для NDWI (Normalized Difference Water Index)
-                // (Green - NIR) / (Green + NIR)
+            case "7-NDWI":
+            case "7-NDWI-L1C":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B03\", \"B08\", \"dataMask\"] }],\n" + // Green, NIR
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"B03\", \"B08\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
@@ -263,33 +285,31 @@ public class SentinelHubService {
                        "    [0.1, 0.1, 0.5, 1], // Очень темно-синий\n" +
                        "    [0.0, 0.0, 0.3, 1]  // Самый темный синий (чистая вода)\n" +
                        "  ]);\n" +
-                       "  return [...color, samples.dataMask];\n" +
+                       "  // Умножаем альфа-канал от colorBlend на samples.dataMask для финальной прозрачности\n" +
+                       "  return [color[0] * 255, color[1] * 255, color[2] * 255, color[3] * samples.dataMask * 255]; // Масштабируем RGB на 255\n" +
                        "}";
             case "SWIR":
-            case "6-SWIR": // Добавляем ID из вашего списка
-            case "6-SWIR-L1C": // Добавляем ID для L1C
-                // Evalscript для SWIR (Short-Wave Infrared) - комбинация B12, B11, B08
-                // Полезно для проникновения сквозь дымку, выделения влажности почвы
+            case "6-SWIR":
+            case "6-SWIR-L1C":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"B12\", \"B11\", \"B08\", \"dataMask\"] }],\n" + // SWIR2, SWIR1, NIR
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"B12\", \"B11\", \"B08\", \"dataMask\"] }],\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
-                       "  // Масштабирование для лучшей визуализации\n" +
-                       "  return [samples.B12 * 2.5, samples.B11 * 2.5, samples.B08 * 2.5, samples.dataMask]; // B12 -> Red, B11 -> Green, B08 -> Blue\n" + // <-- ИСПРАВЛЕНО ЗДЕСЬ
+                       "  // Масштабирование для лучшей визуализации (умножаем на 255)\n" +
+                       "  // Альфа-канал явно из dataMask, масштабированный до 0-255\n" +
+                       "  return [samples.B12 * 255, samples.B11 * 255, samples.B08 * 255, samples.dataMask * 255];\n" +
                        "}";
             case "SCENE_CLASSIFICATION":
-            case "SCENE-CLASSIFICATION": // Добавляем ID из вашего списка
-                // Evalscript для карты классификации сцен (SCL)
-                // Возвращает цвета, соответствующие классам SCL (облака, вода, растительность и т.д.)
+            case "SCENE-CLASSIFICATION":
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
-                       "    input: [{ bands: [\"SCL\"] }],\n" + // SCL - это отдельный канал
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    input: [{ bands: [\"SCL\", \"dataMask\"] }],\n" + // Добавил dataMask в input
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
@@ -306,7 +326,8 @@ public class SentinelHubService {
                        "  else if (scl === 9) color = [0.9, 0.9, 0.9, 1]; // High Probability Clouds\n" +
                        "  else if (scl === 10) color = [0.9, 0.9, 0.9, 1]; // Cirrus\n" +
                        "  else if (scl === 11) color = [0.9, 0.9, 0.9, 1]; // Snow / Ice\n" +
-                       "  return [...color, samples.dataMask];\n" +
+                       "  // Умножаем альфа-канал от SCL на samples.dataMask для финальной прозрачности\n" +
+                       "  return [color[0] * 255, color[1] * 255, color[2] * 255, color[3] * samples.dataMask * 255]; // Масштабируем RGB на 255\n" +
                        "}";
             // Highlight Optimized Natural Color (2_TONEMAPPED_NATURAL_COLOR)
             case "HIGHLIGHT_OPTIMIZED_NATURAL_COLOR":
@@ -316,16 +337,16 @@ public class SentinelHubService {
                 // так как тональная компрессия обычно делается на стороне клиента или
                 // требует более сложного evalscript, который выходит за рамки простого примера.
                 // Для базового представления, это будет выглядеть как Natural Color.
-                // Если TRUE_COLOR удален, то можно использовать базовый evalscript для RGB
                 return "//VERSION=3\n" +
                        "function setup() {\n" +
                        "  return {\n" +
                        "    input: [{ bands: [\"B02\", \"B03\", \"B04\", \"dataMask\"] }],\n" +
-                       "    output: { bands: 4, sampleType: \"AUTO\" }\n" +
+                       "    output: { bands: 4, sampleType: \"UINT8\" }\n" + // Явно UINT8
                        "  };\n" +
                        "}\n" +
                        "function evaluatePixel(samples) {\n" +
-                       "  return [samples.B04 * 2.5, samples.B03 * 2.5, samples.B02 * 2.5, samples.dataMask];\n" +
+                       "  // Альфа-канал явно из dataMask, масштабированный до 0-255\n" +
+                       "  return [samples.B04 * 255, samples.B03 * 255, samples.B02 * 255, samples.dataMask * 255]; // Масштабируем RGB на 255\n" +
                        "}";
 
             default:
