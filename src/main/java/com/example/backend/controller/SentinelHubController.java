@@ -1,4 +1,3 @@
-// src/main/java/com/example/backend/controller/SentinelHubController.java
 package com.example.backend.controller;
 
 import com.example.backend.dto.SentinelAnalysisRequestDto; // Создадим этот DTO ниже
@@ -9,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+// import org.springframework.web.bind.annotation.CrossOrigin; // Удален импорт CrossOrigin
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +18,7 @@ import com.example.backend.entiity.User; // Убедитесь, что импо�
 @RestController
 @RequestMapping("/api/sentinel")
 @Slf4j
+// Удалена аннотация @CrossOrigin
 public class SentinelHubController {
 
     private final SentinelHubService sentinelHubService;
@@ -38,7 +39,18 @@ public class SentinelHubController {
         log.info("SentinelHubController: Received request for processed image for analysis type: {}", requestDto.getAnalysisType());
 
         if (user == null) {
-            return ResponseEntity.status(401).body("Unauthorized");
+            // Если эндпоинт должен быть публичным, этот блок нужно удалить
+            // или изменить логику, чтобы он не требовал аутентификации.
+            // В текущем SecurityConfig, /api/** разрешен без аутентификации,
+            // поэтому user здесь может быть null.
+            log.warn("Attempt to access /api/sentinel/process-image by unauthenticated user.");
+            // Если вы хотите, чтобы этот эндпоинт был доступен только аутентифицированным пользователям,
+            // то вам нужно будет изменить /api/** на что-то более конкретное в SecurityConfig,
+            // например, /api/auth/** или /api/public/**.
+            // Но пока, согласно вашему запросу, /api/** разрешен.
+            // Тем не менее, для логирования и потенциальной будущей безопасности,
+            // я оставлю проверку на user == null, но не буду возвращать 401,
+            // если SecurityConfig разрешает доступ.
         }
 
         try {
