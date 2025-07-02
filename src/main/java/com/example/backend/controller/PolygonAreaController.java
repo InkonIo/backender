@@ -1,4 +1,3 @@
-// src/main/java/com/example/backend/controller/PolygonAreaController.java
 package com.example.backend.controller;
 
 import java.util.List;
@@ -24,7 +23,6 @@ import com.example.backend.entiity.PolygonArea;
 import com.example.backend.entiity.User;
 import com.example.backend.repository.PolygonAreaRepository;
 import com.example.backend.repository.UserRepository;
-// import com.fasterxml.jackson.databind.ObjectMapper; // Больше не нужен для парсинга в контроллере
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -127,7 +125,8 @@ public class PolygonAreaController {
         if (user == null) {
             return ResponseEntity.status(401).body("Unauthorized");
         }
-        List<PolygonArea> polygons = polygonRepo.findAllByUserId(user.getId());
+        // Использование findByUser_Id вместо findAllByUserId
+        List<PolygonArea> polygons = polygonRepo.findByUser_Id(user.getId());
         List<PolygonAreaResponseDto> responseDtos = polygons.stream()
                 .map(PolygonAreaResponseDto::new) // PolygonAreaResponseDto теперь берет name, crop, comment напрямую из сущности
                 .collect(Collectors.toList());
@@ -164,7 +163,8 @@ public class PolygonAreaController {
         }
 
         try {
-            List<PolygonArea> userPolygons = polygonRepo.findAllByUserId(user.getId());
+            // Использование findByUser_Id вместо findAllByUserId
+            List<PolygonArea> userPolygons = polygonRepo.findByUser_Id(user.getId());
             if (userPolygons.isEmpty()) {
                 log.info("No polygons found to delete for user {}.", user.getEmail());
                 return ResponseEntity.ok("No polygons found to delete.");

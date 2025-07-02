@@ -43,6 +43,14 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/recovery/**",
                     "/api/polygons",
+                    "/api/ai/chat",
+                    "/chat/polygons/{polygonId}/messages",
+                    "/chat/polygons/{polygonId}",
+                    "/api/polygons",
+                    "/{polygonId}",
+                    "/clear-all",
+                    "/api",
+                    "/my" ,                   
                     "/",
                     "/error"
                 ).permitAll()
