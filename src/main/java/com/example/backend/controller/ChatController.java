@@ -16,14 +16,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.CrossOrigin; // Добавлен импорт DeleteMapping
+// import org.springframework.web.bind.annotation.CrossOrigin; // Удален импорт CrossOrigin
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController; // Добавлен импорт Transactional
+import org.springframework.web.bind.annotation.RestController;
 
 import com.example.backend.JWT.JwtService;
 import com.example.backend.dto.ChatMessageDto;
@@ -43,7 +43,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 @RestController
-@CrossOrigin(origins = "*")
+// Удалена аннотация @CrossOrigin(origins = "*")
 @RequestMapping("/api")
 public class ChatController {
 
