@@ -32,33 +32,33 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf().disable()
-            .cors().configurationSource(corsConfigurationSource()) // ✅ подключаем CORS
-            .and()
+            .cors(cors -> cors.configurationSource(corsConfigurationSource())) // ✅ подключаем CORS
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
+                    // Разрешаем доступ к Swagger UI и API документации
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
                     "/swagger-resources/**",
                     "/webjars/**",
+                    // Разрешаем доступ к эндпоинтам аутентификации и восстановления
                     "/api/v1/auth/**",
                     "/api/v1/recovery/**",
-                    "/api/polygons",
-                    "/api/ai/chat",
-                    "/chat/polygons/{polygonId}/messages",
-                    "/chat/polygons/{polygonId}",
-                    "/api/polygons",
-                    "/{polygonId}",
-                    "/clear-all",
-                    "/api",
-                    "/my" ,                   
+                    // Разрешаем доступ ко всем API эндпоинтам под /api/
+                    // ВНИМАНИЕ: Это делает большую часть вашего API публичной.
+                    // Если вам нужна аутентификация для определенных API,
+                    // вам нужно будет уточнить эти правила.
+                    "/api/**", 
+                    // Базовые пути
                     "/",
                     "/error"
                 ).permitAll()
+                // Все остальные запросы требуют аутентификации
                 .anyRequest().authenticated()
             )
             .sessionManagement(sess -> sess
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
+            .authenticationProvider(authenticationProvider()) // Добавляем провайдер аутентификации
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .formLogin().disable()
             .httpBasic().disable();
@@ -70,10 +70,12 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of(
-            "http://localhost:5173",
-            "https://agrofarm.kz",
-            "https://user.agrofarm.kz"
-        ));
+                "http://localhost:5173",
+                "https://agrofarm.kz",
+                "https://user.agrofarm.kz", // Добавлен
+                "https://www.user.agrofarm.kz", // Добавлен
+                "https://www.agrofarm.kz" // Добавлен
+            ));        
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         config.setExposedHeaders(List.of("Authorization")); // позволяет фронту читать токен из ответа
@@ -83,7 +85,6 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", config);
         return source;
     }
-
 
     @Bean
     public AuthenticationProvider authenticationProvider() {
