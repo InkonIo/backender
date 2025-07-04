@@ -22,6 +22,7 @@ import com.example.backend.dto.PolygonAreaResponseDto;
 import com.example.backend.dto.PolygonRequestDto;
 import com.example.backend.entiity.PolygonArea;
 import com.example.backend.entiity.User;
+import com.example.backend.repository.ChatMessageRepository; // ДОБАВЛЕНО: Импорт ChatMessageRepository
 import com.example.backend.repository.PolygonAreaRepository;
 import com.example.backend.repository.UserRepository;
 
@@ -37,6 +38,9 @@ public class PolygonAreaController {
 
     @Autowired
     private UserRepository userRepo; // Для получения пользователя, если нужно
+
+    @Autowired // ДОБАВЛЕНО: Внедряем ChatMessageRepository
+    private ChatMessageRepository chatMessageRepository;
 
     // Метод для создания нового полигона
     @PostMapping
@@ -148,12 +152,16 @@ public class PolygonAreaController {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You are not authorized to delete this polygon.");
             }
             try {
+                // ДОБАВЛЕНО: Сначала удаляем все связанные сообщения чата для этого полигона и пользователя
+                chatMessageRepository.deleteByPolygonArea_IdAndUser_Id(polygon.getId(), user.getId());
+
+                // Затем удаляем сам полигон
                 polygonRepo.delete(polygon);
                 log.info("Polygon deleted successfully with ID: {}", polygonId);
                 return ResponseEntity.noContent().build(); // Изменено на 204 No Content
             } catch (Exception e) {
                 log.error("Error deleting polygon {}: {}", polygonId, e.getMessage(), e);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete polygon due to internal server error.");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete polygon due to internal server error: " + e.getMessage()); // Добавлено сообщение об ошибке
             }
         }).orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body("Polygon not found."));
     }
@@ -175,12 +183,18 @@ public class PolygonAreaController {
                 log.info("No polygons found to delete for user {}.", user.getEmail());
                 return ResponseEntity.noContent().build(); // 204 No Content, даже если нечего удалять
             }
+
+            // ДОБАВЛЕНО: Сначала удаляем сообщения чата для каждого полигона
+            for (PolygonArea polygon : userPolygons) {
+                chatMessageRepository.deleteByPolygonArea_IdAndUser_Id(polygon.getId(), user.getId());
+            }
+
             polygonRepo.deleteAll(userPolygons);
             log.info("All polygons cleared successfully for user {}.", user.getEmail());
             return ResponseEntity.noContent().build(); // 204 No Content
         } catch (Exception e) {
             log.error("Error clearing all polygons for user {}: {}", user.getEmail(), e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to clear all polygons due to internal server error.");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to clear all polygons due to internal server error: " + e.getMessage());
         }
     }
 }
