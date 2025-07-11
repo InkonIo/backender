@@ -8,6 +8,7 @@ import com.example.backend.dto.LoginRequest;
 import com.example.backend.dto.LoginResponse;
 import com.example.backend.dto.RegisterRequest;
 import com.example.backend.entiity.User; // Ваш кастомный User entity
+import com.example.backend.exception.AuthException; // Импортируем наше новое исключение
 import com.example.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,10 @@ public class AuthService {
     // Используем PasswordEncoder из SecurityConfig, чтобы он был Bean-ом
     // @Autowired
     // private PasswordEncoder passwordEncoder; // Если вы используете @Autowired
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(); // Или так, если не инжектируется
+    // Примечание: Лучше инжектировать PasswordEncoder как Bean из SecurityConfig.
+    // Если он не инжектируется, убедитесь, что BCryptPasswordEncoder
+    // инициализируется только один раз или является статическим полем.
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(); 
 
     public String register(RegisterRequest request) {
         try {
@@ -45,10 +49,12 @@ public class AuthService {
 
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+                // Теперь выбрасываем AuthException вместо RuntimeException
+                .orElseThrow(() -> new AuthException("Invalid email or password"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new RuntimeException("Invalid email or password");
+            // Теперь выбрасываем AuthException вместо RuntimeException
+            throw new AuthException("Invalid email or password");
         }
 
         // ✅ Генерация JWT-токена

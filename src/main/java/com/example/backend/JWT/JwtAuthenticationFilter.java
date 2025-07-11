@@ -7,6 +7,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import java.util.Optional;
 
 import com.example.backend.repository.UserRepository;
 import com.example.backend.entiity.User; 
@@ -27,52 +28,61 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-
-        final String authHeader = request.getHeader("Authorization");
-        log.info("JWT Filter: Request URL: {}", request.getRequestURI()); // Логгируем URL запроса
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            log.warn("JWT Filter: No Bearer token found or Authorization header missing. Proceeding without authentication.");
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        final String jwtToken = authHeader.substring(7);
-        log.info("JWT Filter: Extracted token: {}", jwtToken);
-
-        final String userEmail = jwtService.extractEmail(jwtToken);
-        log.info("JWT Filter: Extracted email from token: {}", userEmail);
-
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            log.info("JWT Filter: User email is not null and no existing authentication. Looking up user.");
-            
-            userRepository.findByEmail(userEmail).ifPresentOrElse(user -> { 
-                log.info("JWT Filter: User found in DB: {}", user.getEmail());
-                if (jwtService.isTokenValid(jwtToken, user.getEmail())) {
-                    log.info("JWT Filter: Token is valid for user: {}", user.getEmail());
-                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            user, 
-                            null, 
-                            user.getAuthorities() 
-                    );
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                    log.info("JWT Filter: SecurityContextHolder updated for user: {}", user.getEmail());
+        protected void doFilterInternal(HttpServletRequest request,
+                                        HttpServletResponse response,
+                                        FilterChain filterChain) throws ServletException, IOException {
+                                        
+            final String authHeader = request.getHeader("Authorization");
+            log.info("JWT Filter: Request URL: {}", request.getRequestURI());
+                                        
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                log.warn("JWT Filter: No Bearer token found or Authorization header missing. Proceeding without authentication.");
+                filterChain.doFilter(request, response);
+                return;
+            }
+        
+            final String jwtToken = authHeader.substring(7);
+            log.info("JWT Filter: Extracted token: {}", jwtToken);
+        
+            Optional<String> optionalUserEmail = Optional.empty();
+            try {
+                String extractedEmail = jwtService.extractEmail(jwtToken);
+                optionalUserEmail = Optional.ofNullable(extractedEmail);
+                log.info("JWT Filter: Extracted email from token: {}", extractedEmail);
+            } catch (io.jsonwebtoken.ExpiredJwtException e) {
+                log.warn("JWT Filter: Token expired.");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\": \"Token expired\"}");
+                return;
+            } catch (Exception e) {
+                log.error("JWT Filter: Error extracting email from token", e);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\": \"Invalid token\"}");
+                return;
+            }
+        
+            optionalUserEmail.ifPresent(userEmail -> {
+                if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                    userRepository.findByEmail(userEmail).ifPresentOrElse(user -> {
+                        if (jwtService.isTokenValid(jwtToken, user.getEmail())) {
+                            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                    user, null, user.getAuthorities());
+                            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                            SecurityContextHolder.getContext().setAuthentication(authToken);
+                            log.info("JWT Filter: Authenticated user: {}", user.getEmail());
+                        } else {
+                            log.warn("JWT Filter: Token is not valid for user: {}", user.getEmail());
+                        }
+                    }, () -> {
+                        log.warn("JWT Filter: No user found with email: {}", userEmail);
+                    });
                 } else {
-                    log.warn("JWT Filter: Token is NOT valid for user: {}", user.getEmail());
+                    log.info("JWT Filter: User already authenticated.");
                 }
-            }, () -> {
-                log.warn("JWT Filter: User with email {} NOT found in database.", userEmail);
             });
-        } else if (userEmail == null) {
-            log.warn("JWT Filter: User email extracted from token was NULL. Token might be malformed or invalid.");
-        } else { // SecurityContextHolder.getContext().getAuthentication() != null
-            log.info("JWT Filter: User {} already authenticated. Skipping.", userEmail);
+        
+            filterChain.doFilter(request, response);
         }
-
-        filterChain.doFilter(request, response);
-    }
 }
