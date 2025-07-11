@@ -8,7 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.transaction.annotation.Transactional; // Добавлен импорт для @Transactional
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,10 +19,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.backend.dto.PolygonAreaResponseDto;
-import com.example.backend.dto.PolygonRequestDto;
+import com.example.backend.dto.PolygonRequestDto; // Убедитесь, что этот DTO существует и содержит поле 'color'
 import com.example.backend.entiity.PolygonArea;
 import com.example.backend.entiity.User;
-import com.example.backend.repository.ChatMessageRepository; // ДОБАВЛЕНО: Импорт ChatMessageRepository
+import com.example.backend.repository.ChatMessageRepository;
 import com.example.backend.repository.PolygonAreaRepository;
 import com.example.backend.repository.UserRepository;
 
@@ -37,9 +37,9 @@ public class PolygonAreaController {
     private PolygonAreaRepository polygonRepo;
 
     @Autowired
-    private UserRepository userRepo; // Для получения пользователя, если нужно
+    private UserRepository userRepo;
 
-    @Autowired // ДОБАВЛЕНО: Внедряем ChatMessageRepository
+    @Autowired
     private ChatMessageRepository chatMessageRepository;
 
     // Метод для создания нового полигона
@@ -52,7 +52,7 @@ public class PolygonAreaController {
         }
 
         try {
-            // Фронтенд теперь отправляет geoJson как чистую геометрию, а name, crop, comment - как отдельные поля
+            // Фронтенд теперь отправляет geoJson как чистую геометрию, а name, crop, comment, color - как отдельные поля
             PolygonArea newPolygon = PolygonArea.builder()
                     .id(UUID.randomUUID()) // Генерируем новый UUID для ID полигона
                     .user(user)
@@ -60,6 +60,7 @@ public class PolygonAreaController {
                     .name(requestDto.getName())       // Сохраняем имя
                     .crop(requestDto.getCrop())       // Сохраняем культуру
                     .comment(requestDto.getComment()) // Сохраняем комментарий
+                    .color(requestDto.getColor())     // <-- НОВОЕ: Сохраняем цвет из DTO запроса
                     .build();
 
             PolygonArea savedPolygon = polygonRepo.save(newPolygon);
@@ -92,6 +93,7 @@ public class PolygonAreaController {
                 polygon.setName(requestDto.getName());       // Обновляем имя
                 polygon.setCrop(requestDto.getCrop());       // Обновляем культуру
                 polygon.setComment(requestDto.getComment()); // Обновляем комментарий
+                polygon.setColor(requestDto.getColor());     // <-- НОВОЕ: Обновляем цвет из DTO запроса
                 
                 polygonRepo.save(polygon);
                 log.info("Polygon updated successfully with ID: {}", polygonId);
@@ -115,7 +117,7 @@ public class PolygonAreaController {
                     if (!polygon.getUser().getId().equals(user.getId())) {
                         return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You are not authorized to view this polygon.");
                     }
-                    // PolygonAreaResponseDto теперь берет name, crop, comment напрямую из сущности
+                    // PolygonAreaResponseDto теперь берет name, crop, comment, color напрямую из сущности
                     return ResponseEntity.ok(new PolygonAreaResponseDto(polygon)); 
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body("Polygon not found."));
@@ -131,7 +133,7 @@ public class PolygonAreaController {
         // Использование findByUser_Id вместо findAllByUserId
         List<PolygonArea> polygons = polygonRepo.findByUser_Id(user.getId());
         List<PolygonAreaResponseDto> responseDtos = polygons.stream()
-                .map(PolygonAreaResponseDto::new) // PolygonAreaResponseDto теперь берет name, crop, comment напрямую из сущности
+                .map(PolygonAreaResponseDto::new) // PolygonAreaResponseDto теперь берет name, crop, comment, color напрямую из сущности
                 .collect(Collectors.toList());
         log.info("Found {} polygons for user {}.", responseDtos.size(), user.getEmail());
         return ResponseEntity.ok(responseDtos);

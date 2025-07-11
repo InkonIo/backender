@@ -1,15 +1,18 @@
-// src/main/java/com/example/backend/dto/PolygonRequestDto.java
 package com.example.backend.dto;
 
-import java.util.UUID;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import lombok.Data;
-
-@Data
+// Этот DTO используется для входящих запросов (POST и PUT)
+// Он должен содержать все поля, которые фронтенд отправляет на бэкенд
+@Getter
+@Setter
+@NoArgsConstructor
 public class PolygonRequestDto {
-    private UUID id; // Добавляем ID для использования в PUT запросах
-    private String geoJson; // Теперь это поле будет содержать только GeoJSON Geometry
-    private String name;    // Отдельное поле для имени
-    private String crop;    // Отдельное поле для культуры
-    private String comment; // Новое поле для комментария
+    private String name;
+    private String geoJson;
+    private String crop;
+    private String comment;
+    private String color; // НОВОЕ ПОЛЕ: для приема цвета от фронтенда
 }

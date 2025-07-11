@@ -1,4 +1,3 @@
-// src/main/java/com/example/backend/entiity/PolygonArea.java
 package com.example.backend.entiity;
 
 import java.util.UUID;
@@ -40,11 +39,14 @@ public class PolygonArea {
     @Column(name = "comment", columnDefinition = "TEXT") // Новое поле для комментария
     private String comment;
 
+    @Column(name = "color", columnDefinition = "VARCHAR(7)") // НОВОЕ ПОЛЕ: для хранения HEX-кода цвета (например, #RRGGBB)
+    private String color;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     @JsonIgnore
     private User user;
 
     @Column(name = "geo_json", columnDefinition = "TEXT") // Теперь это поле будет содержать только GeoJSON Geometry
-    private String geoJson; 
+    private String geoJson;
 }

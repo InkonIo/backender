@@ -1,4 +1,3 @@
-// src/main/java/com/example/backend/dto/PolygonAreaResponseDto.java
 package com.example.backend.dto;
 
 import java.util.UUID;
@@ -18,6 +17,7 @@ public class PolygonAreaResponseDto {
     private String geoJson; // Теперь это поле содержит только GeoJSON Geometry
     private String crop;    // Теперь это поле берется напрямую из сущности
     private String comment; // Новое поле для комментария, берется напрямую из сущности
+    private String color;   // НОВОЕ ПОЛЕ: для передачи цвета полигона на фронтенд
 
     public PolygonAreaResponseDto(PolygonArea polygonArea) {
         this.id = polygonArea.getId();
@@ -25,5 +25,6 @@ public class PolygonAreaResponseDto {
         this.name = polygonArea.getName();      // Присваиваем напрямую из сущности
         this.crop = polygonArea.getCrop();      // Присваиваем напрямую из сущности
         this.comment = polygonArea.getComment(); // Присваиваем напрямую из сущности
+        this.color = polygonArea.getColor();    // НОВОЕ ПРИСВОЕНИЕ: цвета из сущности
     }
 }
