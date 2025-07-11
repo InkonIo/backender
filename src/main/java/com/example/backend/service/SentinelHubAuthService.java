@@ -34,11 +34,6 @@ public class SentinelHubAuthService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Получает или обновляет Access Token для Sentinel Hub API.
-     * Токен кэшируется и обновляется только при истечении срока действия.
-     * @return Действительный Access Token.
-     */
     public String getAccessToken() {
         // Проверяем, действителен ли текущий токен (с запасом в 60 секунд)
         if (accessToken == null || tokenExpiryTime == null || Instant.now().plusSeconds(60).isAfter(tokenExpiryTime)) {
